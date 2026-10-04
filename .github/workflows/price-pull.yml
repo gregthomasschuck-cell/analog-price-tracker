@@ -1,15 +1,17 @@
 name: Price pull
 
-# Runs every day. Each run only fetches parts not yet captured for the current
-# week, so on most days it finishes in seconds. Daily runs let a basket larger
-# than one day's API quota complete over several days.
+# Pulls every basket SKU once a day and rebuilds the website. Re-running on the
+# same day only fetches SKUs that are still missing (tick "Re-fetch" to redo all).
 on:
   schedule:
     - cron: "17 11 * * *"   # 11:17 UTC daily (7:17 am New York in summer)
+  push:                      # rebuild the site when the code, layout or basket changes
+    branches: [main]
+    paths: [tracker.py, dashboard_template.html, basket.csv]
   workflow_dispatch:         # "Run workflow" button on the Actions tab
     inputs:
       force:
-        description: "Re-fetch parts already captured this week"
+        description: "Re-fetch parts already captured today"
         type: boolean
         default: false
 
@@ -54,8 +56,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data docs
-          if git diff --cached --quiet -- data; then
-            echo "No new prices since the last run; nothing to commit."
+          if git diff --cached --quiet; then
+            echo "No new prices or site changes; nothing to commit."
             exit 0
           fi
           git commit -m "Prices: $(date -u +%Y-%m-%d)"
