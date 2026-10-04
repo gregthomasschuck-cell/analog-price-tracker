@@ -78,6 +78,16 @@ def price_at(breaks: list[tuple[float, float]], qty: int) -> float | None:
     return max(ok, key=lambda t: t[0])[1]
 
 
+def price_at_or_min(breaks: list[tuple[float, float]], qty: int) -> float | None:
+    """Price at `qty`; for reel-only parts whose smallest break is above `qty`,
+    the price at that smallest break (consistent week to week, so fine for an index)."""
+    p = price_at(breaks, qty)
+    if p is not None:
+        return p
+    ok = [(q, pr) for q, pr in breaks if pr and pr > 0]
+    return min(ok, key=lambda t: t[0])[1] if ok else None
+
+
 def parse_money(s) -> float | None:
     if s is None:
         return None
@@ -124,6 +134,30 @@ def norm(mpn: str) -> str:
     return re.sub(r"[^A-Z0-9]", "", mpn.upper())
 
 
+# Distributors also list third-party clones under the same part number (e.g. UMW
+# copies of TI parts). Only accept listings from the basket manufacturer or a
+# brand it has acquired.
+MFR_ALIASES = {
+    "texas instruments": ["texas instruments", "national semi", "burr"],
+    "analog devices": ["analog devices", "maxim", "linear tech"],
+    "microchip": ["microchip", "atmel", "micrel", "microsemi", "smsc"],
+    "nxp": ["nxp", "freescale"],
+    "onsemi": ["onsemi", "on semi", "fairchild"],
+    "stmicroelectronics": ["stmicro"],
+    "infineon": ["infineon", "international rectifier", "cypress"],
+}
+
+
+def mfr_ok(expected: str, got: str) -> bool:
+    if not expected or not got:
+        return True
+    e, g = expected.lower(), got.lower()
+    for key, names in MFR_ALIASES.items():
+        if key in e or e in key:
+            return any(n in g for n in names)
+    return e.split()[0] in g
+
+
 # ----------------------------------------------------------------------------- DigiKey
 class DigiKey:
     """DigiKey Product Information API v4 (2-legged OAuth, client credentials)."""
@@ -166,28 +200,33 @@ class DigiKey:
             return r
         return None
 
-    def lookup(self, mpn: str) -> dict | None:
+    def lookup(self, mpn: str, manufacturer: str = "") -> dict | None:
+        def good(p):
+            return (p and norm(p.get("ManufacturerProductNumber", "")) == norm(mpn)
+                    and mfr_ok(manufacturer, (p.get("Manufacturer") or {}).get("Name", "")))
         r = self._req("GET", f"{self.BASE}/{quote(mpn, safe='')}/productdetails")
         prod = None
         if r is not None and r.status_code == 200:
             prod = r.json().get("Product")
-        if not prod or norm(prod.get("ManufacturerProductNumber", "")) != norm(mpn):
-            # Fall back to keyword search and take the exact MPN match
-            r = self._req("POST", f"{self.BASE}/keyword", json={"Keywords": mpn, "Limit": 10, "Offset": 0})
+        if not good(prod):
+            # Fall back to keyword search: exact MPN from the right manufacturer
+            r = self._req("POST", f"{self.BASE}/keyword", json={"Keywords": mpn, "Limit": 20, "Offset": 0})
             if r is None or r.status_code != 200:
                 return None
             j = r.json()
             cands = (j.get("ExactMatches") or []) + (j.get("Products") or [])
-            prod = next((p for p in cands if norm(p.get("ManufacturerProductNumber", "")) == norm(mpn)), None)
+            prod = next((p for p in cands if good(p)), None)
         return parse_digikey_product(prod) if prod else None
 
 
 def parse_digikey_product(p: dict) -> dict:
     p1, p1k, dk_pn = [], [], ""
+    var_stock = 0
     for v in p.get("ProductVariations") or []:
         breaks = [(float(b.get("BreakQuantity", 0)), float(b.get("UnitPrice", 0) or 0))
                   for b in v.get("StandardPricing") or []]
-        a, b = price_at(breaks, 1), price_at(breaks, PRICE_QTY)
+        var_stock += parse_int(v.get("QuantityAvailableforPackageType")) or 0
+        a, b = price_at(breaks, 1), price_at_or_min(breaks, PRICE_QTY)
         if a: p1.append(a)
         if b:
             p1k.append(b)
@@ -201,7 +240,8 @@ def parse_digikey_product(p: dict) -> dict:
         "dist_pn": dk_pn,
         "price_1": min(p1) if p1 else None,
         "price_1k": min(p1k) if p1k else None,
-        "stock": parse_int(p.get("QuantityAvailable")),
+        # DigiKey omits zero-valued fields, so a missing quantity means none in stock
+        "stock": parse_int(p.get("QuantityAvailable")) if p.get("QuantityAvailable") is not None else var_stock,
         "lead_weeks": parse_lead_weeks(p.get("ManufacturerLeadWeeks")),
         "status": status,
     }
@@ -218,7 +258,7 @@ class Mouser:
         self.key, self.s, self.last = api_key, session, 0.0
         self.exhausted = False
 
-    def lookup_many(self, mpns: list[str]) -> dict[str, dict]:
+    def lookup_many(self, mpns: list[str], mfrs: dict | None = None) -> dict[str, dict]:
         wait = self.MIN_INTERVAL - (time.time() - self.last)
         if wait > 0:
             time.sleep(wait)
@@ -235,15 +275,16 @@ class Mouser:
             self.exhausted = True
             return {}
         parts = ((j.get("SearchResults") or {}).get("Parts")) or []
-        return parse_mouser_parts(parts, mpns)
+        return parse_mouser_parts(parts, mpns, mfrs)
 
 
-def parse_mouser_parts(parts: list[dict], mpns: list[str]) -> dict[str, dict]:
+def parse_mouser_parts(parts: list[dict], mpns: list[str], mfrs: dict | None = None) -> dict[str, dict]:
     want = {norm(m): m for m in mpns}
+    mfrs = mfrs or {}
     out: dict[str, dict] = {}
     for p in parts:
         key = norm(p.get("ManufacturerPartNumber", ""))
-        if key not in want:
+        if key not in want or not mfr_ok(mfrs.get(want[key], ""), p.get("Manufacturer", "")):
             continue
         breaks = [(float(parse_int(b.get("Quantity")) or 0), parse_money(b.get("Price")))
                   for b in p.get("PriceBreaks") or []]
@@ -251,7 +292,7 @@ def parse_mouser_parts(parts: list[dict], mpns: list[str]) -> dict[str, dict]:
             "manufacturer_returned": p.get("Manufacturer", ""),
             "dist_pn": p.get("MouserPartNumber", ""),
             "price_1": price_at(breaks, 1),
-            "price_1k": price_at(breaks, PRICE_QTY),
+            "price_1k": price_at_or_min(breaks, PRICE_QTY),
             "stock": parse_int(p.get("AvailabilityInStock")) if p.get("AvailabilityInStock") not in (None, "") else (parse_int(p.get("Availability")) or 0),
             "lead_weeks": parse_lead_weeks(p.get("LeadTime")),
             "status": p.get("LifecycleStatus") or "",
@@ -311,6 +352,7 @@ def cmd_pull(args):
     wk = week_of(today)
     done = {(r["distributor"], r["mpn"]) for r in read_obs() if r["week"] == wk} if not args.force else set()
     s = requests.Session()
+    mfr_of = {b["mpn"]: b.get("manufacturer", "") for b in basket}
     total_new = 0
 
     if cfg.get("digikey_client_id") and "digikey" in args.only:
@@ -323,7 +365,7 @@ def cmd_pull(args):
                 print("  DigiKey daily quota reached; run pull again tomorrow to finish this week.")
                 break
             try:
-                rec = dk.lookup(mpn)
+                rec = dk.lookup(mpn, mfr_of.get(mpn, ""))
             except Exception as e:  # keep going on single-part errors
                 print(f"  {mpn}: error {e}")
                 rec = None
@@ -353,7 +395,7 @@ def cmd_pull(args):
                 print("  Mouser daily quota reached; run pull again tomorrow to finish this week.")
                 break
             try:
-                got = mo.lookup_many(chunk)
+                got = mo.lookup_many(chunk, mfr_of)
             except Exception as e:
                 print(f"  batch starting {chunk[0]}: error {e}")
                 continue
