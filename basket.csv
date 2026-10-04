@@ -1,0 +1,182 @@
+mpn,manufacturer,vendor,category
+TPS54331DR,Texas Instruments,TI,Power management
+TPS5430DDAR,Texas Instruments,TI,Power management
+TPS62130RGTR,Texas Instruments,TI,Power management
+TPS563200DDCR,Texas Instruments,TI,Power management
+TPS54202DDCR,Texas Instruments,TI,Power management
+TPS61023DRLR,Texas Instruments,TI,Power management
+TPS7A4700RGWR,Texas Instruments,TI,Power management
+TLV1117-33IDCYR,Texas Instruments,TI,Power management
+LM317DCYR,Texas Instruments,TI,Power management
+TLV70033DDCR,Texas Instruments,TI,Power management
+TPS73733DCQR,Texas Instruments,TI,Power management
+LM2596S-5.0/NOPB,Texas Instruments,TI,Power management
+TPS2113APWR,Texas Instruments,TI,Power management
+LM5164DDAR,Texas Instruments,TI,Power management
+TPS22918DBVR,Texas Instruments,TI,Power management
+LM74700QDBVRQ1,Texas Instruments,TI,Power management
+UCC28C43DR,Texas Instruments,TI,Power management
+TL431AIDBZR,Texas Instruments,TI,Voltage references
+REF3030AIDBZR,Texas Instruments,TI,Voltage references
+REF5025AIDR,Texas Instruments,TI,Voltage references
+LM358DR,Texas Instruments,TI,Amplifiers & comparators
+LM2904DR,Texas Instruments,TI,Amplifiers & comparators
+TLV9062IDR,Texas Instruments,TI,Amplifiers & comparators
+OPA2333AIDR,Texas Instruments,TI,Amplifiers & comparators
+OPA333AIDBVR,Texas Instruments,TI,Amplifiers & comparators
+OPA376AIDBVR,Texas Instruments,TI,Amplifiers & comparators
+TLV9001IDCKR,Texas Instruments,TI,Amplifiers & comparators
+LMV321IDBVR,Texas Instruments,TI,Amplifiers & comparators
+INA219AIDCNR,Texas Instruments,TI,Amplifiers & comparators
+INA226AIDGSR,Texas Instruments,TI,Amplifiers & comparators
+INA240A1PWR,Texas Instruments,TI,Amplifiers & comparators
+LM393DR,Texas Instruments,TI,Amplifiers & comparators
+LM339DR,Texas Instruments,TI,Amplifiers & comparators
+TLV3201AIDBVR,Texas Instruments,TI,Amplifiers & comparators
+NE555DR,Texas Instruments,TI,Amplifiers & comparators
+ADS1115IDGSR,Texas Instruments,TI,Data converters
+ADS1015IDGSR,Texas Instruments,TI,Data converters
+ADS1220IPWR,Texas Instruments,TI,Data converters
+DAC8551IADGKR,Texas Instruments,TI,Data converters
+SN65HVD230DR,Texas Instruments,TI,Interface
+SN65HVD3082EDR,Texas Instruments,TI,Interface
+THVD1450DR,Texas Instruments,TI,Interface
+MAX3232IDR,Texas Instruments,TI,Interface
+TXS0108EPWR,Texas Instruments,TI,Interface
+TXB0104PWR,Texas Instruments,TI,Interface
+TCA9548APWR,Texas Instruments,TI,Interface
+PCA9306DCTR,Texas Instruments,TI,Interface
+TPD4E05U06DQAR,Texas Instruments,TI,Interface
+ISO7741DWR,Texas Instruments,TI,Isolation
+ISO7721DR,Texas Instruments,TI,Isolation
+ISO1050DUBR,Texas Instruments,TI,Isolation
+UCC21520DWR,Texas Instruments,TI,Isolation
+UCC27517DBVR,Texas Instruments,TI,Discretes & drivers
+SN74LVC1G08DBVR,Texas Instruments,TI,Logic
+SN74HC595DR,Texas Instruments,TI,Logic
+SN74LVC245APWR,Texas Instruments,TI,Logic
+SN74AHCT125PWR,Texas Instruments,TI,Logic
+SN74LV1T34DBVR,Texas Instruments,TI,Logic
+MSP430G2553IPW20R,Texas Instruments,TI,MCU (embedded)
+MSP430FR2433IRGER,Texas Instruments,TI,MCU (embedded)
+LT3045EDD#PBF,Analog Devices,ADI,Power management
+LT1763CS8-3.3#PBF,Analog Devices,ADI,Power management
+LT8610EMSE#PBF,Analog Devices,ADI,Power management
+LT3080EDD#PBF,Analog Devices,ADI,Power management
+LTC3780EGN#PBF,Analog Devices,ADI,Power management
+LTC4412ES6#TRMPBF,Analog Devices,ADI,Power management
+LTC2990CMS#PBF,Analog Devices,ADI,Power management
+LTM4644EY#PBF,Analog Devices,ADI,Power management
+ADP150AUJZ-3.3-R7,Analog Devices,ADI,Power management
+MAX17043G+T,Analog Devices,ADI,Power management
+MAX1555EZK+T,Analog Devices,ADI,Power management
+AD8605ARTZ-REEL7,Analog Devices,ADI,Amplifiers & comparators
+AD8628ARTZ-REEL7,Analog Devices,ADI,Amplifiers & comparators
+AD620ARZ,Analog Devices,ADI,Amplifiers & comparators
+AD8221ARZ,Analog Devices,ADI,Amplifiers & comparators
+AD8672ARMZ,Analog Devices,ADI,Amplifiers & comparators
+AD8065ARTZ-REEL7,Analog Devices,ADI,Amplifiers & comparators
+OP07CSZ,Analog Devices,ADI,Amplifiers & comparators
+ADA4528-1ARMZ,Analog Devices,ADI,Amplifiers & comparators
+LT1013DS8#PBF,Analog Devices,ADI,Amplifiers & comparators
+LT1490ACS8#PBF,Analog Devices,ADI,Amplifiers & comparators
+ADR435ARMZ,Analog Devices,ADI,Voltage references
+ADR4525BRZ,Analog Devices,ADI,Voltage references
+ADR4550BRZ,Analog Devices,ADI,Voltage references
+LTC6655BHMS8-2.5#PBF,Analog Devices,ADI,Voltage references
+AD7124-8BCPZ,Analog Devices,ADI,Data converters
+AD7606BSTZ,Analog Devices,ADI,Data converters
+AD5545BRUZ,Analog Devices,ADI,Data converters
+AD9833BRMZ,Analog Devices,ADI,Data converters
+AD7793BRUZ,Analog Devices,ADI,Data converters
+LTC2400CS8#PBF,Analog Devices,ADI,Data converters
+LTC2440CGN#PBF,Analog Devices,ADI,Data converters
+MAX6675ISA+T,Analog Devices,ADI,Data converters
+MAX31855KASA+T,Analog Devices,ADI,Data converters
+MAX3232ECAE+T,Analog Devices,ADI,Interface
+MAX485ESA+T,Analog Devices,ADI,Interface
+MAX3485ESA+T,Analog Devices,ADI,Interface
+ADM3485EARZ,Analog Devices,ADI,Interface
+DS3231SN#T&R,Analog Devices,ADI,Interface
+ADUM1201ARZ,Analog Devices,ADI,Isolation
+ADUM1201BRZ,Analog Devices,ADI,Isolation
+ADUM3160BRWZ,Analog Devices,ADI,Isolation
+ADUM4160BRWZ,Analog Devices,ADI,Isolation
+ADUM1250ARZ,Analog Devices,ADI,Isolation
+ADM3053BRWZ,Analog Devices,ADI,Isolation
+ADM2587EBRWZ,Analog Devices,ADI,Isolation
+ADXL345BCCZ,Analog Devices,ADI,Sensors
+ADXL335BCPZ,Analog Devices,ADI,Sensors
+DS18B20+,Analog Devices,ADI,Sensors
+MCP1700T-3302E/TT,Microchip,MCHP,Power management
+MCP1702T-3302E/CB,Microchip,MCHP,Power management
+MCP73831T-2ACI/OT,Microchip,MCHP,Power management
+MIC5219-3.3YM5-TR,Microchip,MCHP,Power management
+MIC29302WU-TR,Microchip,MCHP,Power management
+MCP1640T-I/CHY,Microchip,MCHP,Power management
+MCP16301T-I/CHY,Microchip,MCHP,Power management
+MCP6001T-I/OT,Microchip,MCHP,Amplifiers & comparators
+MCP6002T-I/SN,Microchip,MCHP,Amplifiers & comparators
+MCP6004T-I/SL,Microchip,MCHP,Amplifiers & comparators
+MCP3008-I/P,Microchip,MCHP,Data converters
+MCP3208-CI/SL,Microchip,MCHP,Data converters
+MCP4725A0T-E/CH,Microchip,MCHP,Data converters
+MCP4921-E/SN,Microchip,MCHP,Data converters
+MCP3421A0T-E/CH,Microchip,MCHP,Data converters
+MCP2551-I/SN,Microchip,MCHP,Interface
+MCP2562-E/SN,Microchip,MCHP,Interface
+MCP2515-I/SO,Microchip,MCHP,Interface
+MCP23017-E/SP,Microchip,MCHP,Interface
+LAN8720A-CP-TR,Microchip,MCHP,Interface
+KSZ8081RNACA-TR,Microchip,MCHP,Interface
+MCP9700AT-E/TT,Microchip,MCHP,Sensors
+MCP9808-E/MS,Microchip,MCHP,Sensors
+ATMEGA328P-AU,Microchip,MCHP,MCU (embedded)
+ATSAMD21G18A-AU,Microchip,MCHP,MCU (embedded)
+TJA1051T/3/1J,NXP,NXP,Interface
+"PCA9685PW,118",NXP,NXP,Interface
+"PCF8574T/3,518",NXP,NXP,Interface
+"PCA9555PW,118",NXP,NXP,Interface
+"PCA9548APW,118",NXP,NXP,Interface
+PCF85063ATT/AJ,NXP,NXP,Interface
+LPC1768FBD100K,NXP,NXP,MCU (embedded)
+MK64FN1M0VLL12,NXP,NXP,MCU (embedded)
+MIMXRT1062DVL6B,NXP,NXP,MCU (embedded)
+LPC55S69JBD100K,NXP,NXP,MCU (embedded)
+NCP1117ST33T3G,onsemi,ON,Power management
+MC33063ADR2G,onsemi,ON,Power management
+NCP1529ASNT1G,onsemi,ON,Power management
+MC78L05ACDR2G,onsemi,ON,Power management
+LM393DR2G,onsemi,ON,Amplifiers & comparators
+LM358DR2G,onsemi,ON,Amplifiers & comparators
+BSS138LT1G,onsemi,ON,Discretes & drivers
+2N7002LT1G,onsemi,ON,Discretes & drivers
+MMBT3904LT1G,onsemi,ON,Discretes & drivers
+MBRS340T3G,onsemi,ON,Discretes & drivers
+FDN340P,onsemi,ON,Discretes & drivers
+LD1117S33TR,STMicroelectronics,ST,Power management
+LDL1117S33R,STMicroelectronics,ST,Power management
+L7805CV,STMicroelectronics,ST,Power management
+LM317D2T-TR,STMicroelectronics,ST,Power management
+VIPER22ASTR-E,STMicroelectronics,ST,Power management
+LM358DT,STMicroelectronics,ST,Amplifiers & comparators
+LM2903DT,STMicroelectronics,ST,Amplifiers & comparators
+TSV912IST,STMicroelectronics,ST,Amplifiers & comparators
+TSZ121ILT,STMicroelectronics,ST,Amplifiers & comparators
+USBLC6-2SC6,STMicroelectronics,ST,Interface
+LIS3DHTR,STMicroelectronics,ST,Sensors
+LSM6DSOXTR,STMicroelectronics,ST,Sensors
+STM32F103C8T6,STMicroelectronics,ST,MCU (embedded)
+STM32F407VGT6,STMicroelectronics,ST,MCU (embedded)
+STM32G431CBU6,STMicroelectronics,ST,MCU (embedded)
+STM32L432KCU6,STMicroelectronics,ST,MCU (embedded)
+IRLML6344TRPBF,Infineon,IFX,Discretes & drivers
+IRLML2502TRPBF,Infineon,IFX,Discretes & drivers
+IRF540NPBF,Infineon,IFX,Discretes & drivers
+IRLZ44NPBF,Infineon,IFX,Discretes & drivers
+IRFZ44NPBF,Infineon,IFX,Discretes & drivers
+IRF7341TRPBF,Infineon,IFX,Discretes & drivers
+IR2104STRPBF,Infineon,IFX,Discretes & drivers
+IR2110STRPBF,Infineon,IFX,Discretes & drivers
+IRS2092STRPBF,Infineon,IFX,Discretes & drivers
+CY8C4245AXI-483,Infineon,IFX,MCU (embedded)
