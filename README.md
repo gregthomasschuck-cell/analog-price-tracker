@@ -1,6 +1,6 @@
 # Analog Price Tracker
 
-A weekly fixed-SKU price index for analog semiconductors. A GitHub Action pulls the
+A daily fixed-SKU price index for analog semiconductors. A GitHub Action pulls the
 1,000-unit price, stock and quoted lead time for every part in `basket.csv` from the
 DigiKey and Mouser APIs, saves the history to `data/observations.csv`, and rebuilds a
 dashboard that GitHub Pages serves as a website: vendor pricing, category pricing,
@@ -26,12 +26,14 @@ Until the first pull runs, the site shows synthetic sample data, clearly labeled
    Branch: `main`, folder: `/docs` → Save. The site appears at
    `https://<your-username>.github.io/<repo-name>/` within a minute or two.
 5. **Run the first pull:** Actions tab → *Price pull* → *Run workflow*. A full basket
-   takes about 10 minutes. When it finishes, the site switches from sample to live data.
+   takes about 5 minutes. When it finishes, the site switches from sample to live data.
 6. Open `data/not_found.csv` and fix any part numbers the distributors didn't recognise
    in `basket.csv` (edit it right on GitHub). Corrected parts are picked up next run.
 
 After that it runs on its own every day at 11:17 UTC. The index gets its first
-week-over-week reading after the second week of data.
+day-over-day reading with the second day of data; 1W, 1M and 3M changes fill in as
+history builds. Editing `basket.csv`, `tracker.py` or the dashboard template on GitHub
+rebuilds the site automatically.
 
 **Visibility.** On a free GitHub account, Pages only serves public repos, and the site is
 visible to anyone with the link (the page asks search engines not to index it). A private
@@ -40,22 +42,21 @@ site needs GitHub Enterprise Cloud with private Pages.
 ## Editing the basket
 
 `basket.csv` has four columns: `mpn, manufacturer, vendor, category`. Add or remove rows
-any time. New parts join the index once they have two weeks of prices, so additions never
+any time. New parts join the index once they have two days of prices, so additions never
 cause a jump. Use exact, orderable distributor part numbers including the package suffix
 (e.g. `LM358DR`, not `LM358`). Part numbers containing commas (NXP style, e.g.
 `PCA9685PW,118`) need quotes around them.
 
-**Scaling to thousands of parts.** Mouser covers ~10,000 parts/day. DigiKey uses one or two
-calls per part, so ~500–1,000 parts/day. Because the Action runs daily and only fetches
-what's missing for the week, a larger basket fills in over a few days. DigiKey will raise
-the quota on request through the developer portal.
+**Scaling to thousands of parts.** Mouser covers ~10,000 parts/day (10 per call). DigiKey
+uses one or two calls per part, so a daily basket tops out around 500–1,000 parts on the
+default quota. DigiKey raises the quota on request through the developer portal.
 
 ## How the index works
 
 * **Price:** the unit price at the 1,000-piece break (the largest break ≤ 1,000). At DigiKey
   the cheapest packaging option is used (cut tape vs reel).
-* **Chain:** each week, every part/distributor pair priced both this week and at its previous
-  observation (≤ 4 weeks back) contributes a price relative. The index is the chained
+* **Chain:** each day, every part/distributor pair priced both today and at its previous
+  observation (≤ 14 days back) contributes a price relative. The index is the chained
   geometric mean of those relatives, starting at 100. Vendor and category indices use the
   same method on their subset.
 * **Data-error guard:** relatives below 0.5x or above 2.0x are excluded (usually a listing or
