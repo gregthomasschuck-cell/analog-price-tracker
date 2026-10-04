@@ -4,15 +4,14 @@ Analog Price Tracker
 --------------------
 Weekly fixed-SKU price tracker for analog semis using the DigiKey and Mouser APIs.
 
-  python tracker.py pull      # fetch this week's prices for every SKU in basket.csv
+  python tracker.py pull      # fetch today's prices for every SKU in basket.csv
   python tracker.py build     # recompute the index and write dashboard.html + tracker.xlsx
-  python tracker.py run       # pull, then build (what the weekly schedule calls)
+  python tracker.py run       # pull, then build (what the daily schedule calls)
   python tracker.py sample    # write a dashboard from synthetic data to preview the layout
   python tracker.py build --out docs   # website mode, used by the GitHub Action
 
-Pulls are resumable: a SKU already captured for a distributor in the current week
-is skipped, so you can run `pull` daily to cover baskets larger than one day's
-API quota. Credentials go in config.json (see config.example.json) or environment
+Pulls are resumable: a SKU already captured for a distributor today is skipped,
+so re-running `pull` after a quota stop or an error only fetches what's missing. Credentials go in config.json (see config.example.json) or environment
 variables DIGIKEY_CLIENT_ID / DIGIKEY_CLIENT_SECRET / MOUSER_API_KEY.
 """
 from __future__ import annotations
@@ -39,8 +38,8 @@ DASHBOARD = HERE / "dashboard.html"
 XLSX = HERE / "tracker.xlsx"
 
 PRICE_QTY = 1000          # price break tracked for the index
-REL_MIN, REL_MAX = 0.5, 2.0   # week-over-week relatives outside this band are treated as data errors
-MAX_GAP_WEEKS = 4         # compare to the last observation if it is at most this many weeks old
+REL_MIN, REL_MAX = 0.5, 2.0   # day-over-day relatives outside this band are treated as data errors
+MAX_GAP_DAYS = 14         # compare to the last observation if it is at most this many days old
 OBS_FIELDS = ["date", "week", "distributor", "mpn", "manufacturer_returned", "dist_pn",
               "price_1", "price_1k", "stock", "lead_weeks", "status"]
 
@@ -326,7 +325,7 @@ def append_obs(rows: list[dict]):
 
 
 def record_missing(dist: str, mpns: list[str], today: str):
-    """Keep one row per (week, distributor, mpn) so daily retries don't pile up duplicates."""
+    """Keep one row per (week, distributor, mpn) so daily runs don't pile up duplicates."""
     if not mpns:
         return
     DATA_DIR.mkdir(exist_ok=True)
@@ -350,7 +349,7 @@ def cmd_pull(args):
     basket = load_basket()
     today = date.today()
     wk = week_of(today)
-    done = {(r["distributor"], r["mpn"]) for r in read_obs() if r["week"] == wk} if not args.force else set()
+    done = {(r["distributor"], r["mpn"]) for r in read_obs() if r["date"] == today.isoformat()} if not args.force else set()
     s = requests.Session()
     mfr_of = {b["mpn"]: b.get("manufacturer", "") for b in basket}
     total_new = 0
@@ -358,11 +357,11 @@ def cmd_pull(args):
     if cfg.get("digikey_client_id") and "digikey" in args.only:
         dk = DigiKey(cfg["digikey_client_id"], cfg["digikey_client_secret"], s)
         todo = [b["mpn"] for b in basket if ("digikey", b["mpn"]) not in done][: args.limit or None]
-        print(f"DigiKey: {len(todo)} SKUs to fetch for week of {wk}")
+        print(f"DigiKey: {len(todo)} SKUs to fetch for {today.isoformat()}")
         rows, miss = [], []
         for i, mpn in enumerate(todo, 1):
             if dk.exhausted:
-                print("  DigiKey daily quota reached; run pull again tomorrow to finish this week.")
+                print("  DigiKey daily quota reached; the remaining SKUs are skipped today.")
                 break
             try:
                 rec = dk.lookup(mpn, mfr_of.get(mpn, ""))
@@ -387,12 +386,12 @@ def cmd_pull(args):
     if cfg.get("mouser_api_key") and "mouser" in args.only:
         mo = Mouser(cfg["mouser_api_key"], s)
         todo = [b["mpn"] for b in basket if ("mouser", b["mpn"]) not in done][: args.limit or None]
-        print(f"Mouser: {len(todo)} SKUs to fetch for week of {wk}")
+        print(f"Mouser: {len(todo)} SKUs to fetch for {today.isoformat()}")
         miss = []
         for i in range(0, len(todo), Mouser.BATCH):
             chunk = todo[i:i + Mouser.BATCH]
             if mo.exhausted:
-                print("  Mouser daily quota reached; run pull again tomorrow to finish this week.")
+                print("  Mouser daily quota reached; the remaining SKUs are skipped today.")
                 break
             try:
                 got = mo.lookup_many(chunk, mfr_of)
@@ -415,14 +414,13 @@ def cmd_pull(args):
 # ----------------------------------------------------------------------------- index math
 def compute(obs: list[dict], basket: list[dict], is_sample=False) -> dict:
     meta = {b["mpn"]: b for b in basket}
-    # Keep the latest observation per (week, distributor, mpn), only for basket SKUs
+    # Keep the latest observation per (date, distributor, mpn), only for basket SKUs
     latest: dict[tuple, dict] = {}
     for r in obs:
         if r["mpn"] not in meta:
             continue
-        k = (r["week"], r["distributor"], r["mpn"])
-        if k not in latest or r["date"] >= latest[k]["date"]:
-            latest[k] = r
+        k = (r["date"], r["distributor"], r["mpn"])
+        latest[k] = r   # later rows (e.g. a forced re-fetch) replace earlier ones
     if not latest:
         raise SystemExit("No observations yet. Run `python tracker.py pull` first.")
 
@@ -433,12 +431,13 @@ def compute(obs: list[dict], basket: list[dict], is_sample=False) -> dict:
         except (TypeError, ValueError):
             return None
 
-    weeks = sorted({k[0] for k in latest})
-    wi = {w: i for i, w in enumerate(weeks)}
+    dates = sorted({k[0] for k in latest})
+    wi = {w: i for i, w in enumerate(dates)}
+    dnum = [date.fromisoformat(x).toordinal() for x in dates]
     dists = sorted({k[1] for k in latest})
-    T = len(weeks)
+    T = len(dates)
 
-    # series[(dist, mpn)] = list over weeks of price_1k
+    # series[(dist, mpn)] = list over dates of price_1k
     series: dict[tuple, list] = {}
     stock: dict[tuple, list] = {}
     lead: dict[tuple, list] = {}
@@ -448,14 +447,14 @@ def compute(obs: list[dict], basket: list[dict], is_sample=False) -> dict:
         stock.setdefault(key, [None] * T)[wi[w]] = f(r["stock"])
         lead.setdefault(key, [None] * T)[wi[w]] = f(r["lead_weeks"])
 
-    # Week-over-week relatives per (dist, mpn): compare with last priced week within MAX_GAP_WEEKS
+    # Period-over-period relatives per (dist, mpn): compare with the last priced day within MAX_GAP_DAYS
     rel: dict[tuple, list] = {}
     for key, s in series.items():
         out, last_i = [None] * T, None
         for t, p in enumerate(s):
             if p is None:
                 continue
-            if last_i is not None and t - last_i <= MAX_GAP_WEEKS:
+            if last_i is not None and dnum[t] - dnum[last_i] <= MAX_GAP_DAYS:
                 x = p / s[last_i]
                 out[t] = x if REL_MIN <= x <= REL_MAX else None
             last_i = t
@@ -486,14 +485,23 @@ def compute(obs: list[dict], basket: list[dict], is_sample=False) -> dict:
     idx_c = {c: chain(keys_where(lambda b, c=c: b["category"] == c)) for c in category_order}
 
     L = T - 1
-    def chg(arr, n):
-        if n is None:
-            j = 0
-        else:
-            j = max(0, L - n)
-        if L == 0 or arr[j] in (None, 0):
+    def back(days):
+        """Index of the latest pull at least `days` calendar days before the newest one."""
+        if days is None:
+            return 0 if L > 0 else None
+        target = dnum[L] - days
+        js = [i for i in range(L) if dnum[i] <= target]
+        return js[-1] if js else None
+
+    def chg(arr, days):
+        j = back(days)
+        if j is None or arr[j] in (None, 0):
             return None
         return arr[L] / arr[j] - 1
+
+    j90 = next((i for i in range(T) if dnum[i] >= dnum[L] - 90), 0)
+    def spark(arr):
+        return arr[j90:]
 
     def lastval(arr):
         return arr[L]
@@ -518,9 +526,10 @@ def compute(obs: list[dict], basket: list[dict], is_sample=False) -> dict:
 
     def group_row(name, keys, arr):
         n_up, n_down, _, _ = up_down(keys, L)
-        return {"name": name, "parts": len({k[1] for k in keys}), "index": arr[L], "wow": chg(arr, 1),
-                "w4": chg(arr, 4), "w13": chg(arr, 13), "since": chg(arr, None), "n_up": n_up, "n_down": n_down,
-                "instock": instock_share(keys, L) or 0, "lead": lead_med(keys, L), "spark": arr[-13:]}
+        return {"name": name, "parts": len({k[1] for k in keys}), "index": arr[L], "d1": chg(arr, 1),
+                "w1": chg(arr, 7), "m1": chg(arr, 30), "m3": chg(arr, 90), "since": chg(arr, None),
+                "n_up": n_up, "n_down": n_down,
+                "instock": instock_share(keys, L) or 0, "lead": lead_med(keys, L), "spark": spark(arr)}
 
     vendors = [group_row(v, keys_where(lambda b, v=v: b["vendor"] == v), idx_v[v]) for v in vendor_order]
     categories = [group_row(c, keys_where(lambda b, c=c: b["category"] == c), idx_c[c]) for c in category_order]
@@ -542,32 +551,37 @@ def compute(obs: list[dict], basket: list[dict], is_sample=False) -> dict:
         products.append({
             "mpn": m, "vendor": b["vendor"], "category": b["category"],
             "dk": lastp("digikey"), "mo": lastp("mouser"),
-            "wow": chg(arr, 1), "w4": chg(arr, 4), "since": chg(arr, None),
+            "d1": chg(arr, 1), "w1": chg(arr, 7), "m1": chg(arr, 30), "since": chg(arr, None),
             "stock": int(sum(stk)) if stk else None, "lead": med([lead[k][L] for k in ks]),
-            "spark": arr[-13:],
+            "spark": spark(arr),
+            "_d": (arr[L] / arr[L - 1] - 1) if L > 0 and arr[L - 1] else None,
         })
 
     priced = [p for p in products if p["dk"] is not None or p["mo"] is not None]
     n_up, n_down, n_up_big, n_priced = up_down(keys_all, L)
     # count parts, not part/distributor pairs, for the headline
-    part_wow = [p["wow"] for p in products if p["wow"] is not None]
+    # change vs the previous pull, per part
+    part_wow = [p["_d"] for p in products if p.get("_d") is not None]
     n_up = sum(1 for x in part_wow if x > 0.0005)
     n_down = sum(1 for x in part_wow if x < -0.0005)
     n_up_big = sum(1 for x in part_wow if x > 0.10)
 
     instock_series = [instock_share(keys_all, t) for t in range(T)]
     lead_series = [lead_med(keys_all, t) for t in range(T)]
-    j4 = max(0, L - 4)
+    j30 = back(30)
     kpis = {
-        "index": idx_all[L], "wow": chg(idx_all, 1), "w4": chg(idx_all, 4), "since": chg(idx_all, None),
+        "index": idx_all[L], "d1": chg(idx_all, 1), "w1": chg(idx_all, 7), "m1": chg(idx_all, 30), "since": chg(idx_all, None),
         "n_up": n_up, "n_down": n_down, "n_up_big": n_up_big, "n_priced": len(part_wow) or len(priced),
-        "lead": lead_series[L], "lead_d4": (lead_series[L] - lead_series[j4]) if L and lead_series[L] is not None and lead_series[j4] is not None else None,
-        "instock": instock_series[L] or 0, "instock_d4": (instock_series[L] - instock_series[j4]) if L and instock_series[L] is not None and instock_series[j4] is not None else None,
+        "lead": lead_series[L], "lead_d30": (lead_series[L] - lead_series[j30]) if j30 is not None and lead_series[L] is not None and lead_series[j30] is not None else None,
+        "instock": instock_series[L] or 0, "instock_d30": (instock_series[L] - instock_series[j30]) if j30 is not None and instock_series[L] is not None and instock_series[j30] is not None else None,
     }
+    for p in products:
+        p.pop("_d", None)
 
     out = {
-        "generated": datetime.now().isoformat(timespec="minutes"), "is_sample": is_sample,
-        "latest_week": weeks[-1], "weeks": weeks, "distributors": [{"digikey": "DigiKey", "mouser": "Mouser"}.get(d, d) for d in dists],
+        # date of the newest price pulled, so the page only changes when the data does
+        "generated": max(r["date"] for r in latest.values()) if not is_sample else datetime.now().date().isoformat(), "is_sample": is_sample,
+        "latest_date": dates[-1], "dates": dates, "distributors": [{"digikey": "DigiKey", "mouser": "Mouser"}.get(d, d) for d in dists],
         "n_parts": len(products), "vendor_order": vendor_order, "category_order": category_order,
         "index": {"all": idx_all, "vendors": idx_v, "categories": idx_c},
         "vendors": vendors, "categories": categories, "products": products,
@@ -581,33 +595,45 @@ def compute(obs: list[dict], basket: list[dict], is_sample=False) -> dict:
 def trends(d: dict) -> list[dict]:
     t = []
     k = d["kpis"]
-    P = lambda x: f"{x * 100:+.1f}%"
-    if k["w4"] is not None:
-        t.append({"kind": "price", "text": f"Basket {('up' if k['w4'] >= 0 else 'down')} {abs(k['w4']) * 100:.1f}% over 4 weeks and {P(k['since'])} since tracking began; {k['n_up']} of {k['n_priced']} SKUs rose this week."})
-    vs = [v for v in d["vendors"] if v["w4"] is not None]
-    if vs:
-        hi = max(vs, key=lambda v: v["w4"]); lo = min(vs, key=lambda v: v["w4"])
-        t.append({"kind": "price", "text": f"{hi['name']} is the strongest vendor over 4 weeks ({P(hi['w4'])}); {lo['name']} the weakest ({P(lo['w4'])})."})
-        steps = [v for v in d["vendors"] if v["wow"] is not None and v["wow"] > 0.03]
-        if steps:
-            t.append({"kind": "price", "text": "Step-up this week, consistent with a price-increase notice landing: " + ", ".join(f"{v['name']} {P(v['wow'])}" for v in steps) + "."})
-    cs = [c for c in d["categories"] if c["w4"] is not None]
-    if cs:
-        hi = max(cs, key=lambda c: c["w4"])
-        t.append({"kind": "price", "text": f"{hi['name']} leads categories over 4 weeks at {P(hi['w4'])}."})
+    P = lambda x: "0.0%" if abs(x) < 0.0005 else f"{x * 100:+.1f}%"
+    # use the longest window that has data: 1 month, else 1 week, else since the last pull
+    win = next(((key, label) for key, label in (("m1", "the past month"), ("w1", "the past week"), ("d1", "the last day"))
+                if k.get(key) is not None), None)
+    if win:
+        key, label = win
+        v = k[key]
+        move = "flat" if abs(v) < 0.0005 else f"{'up' if v > 0 else 'down'} {abs(v) * 100:.1f}%"
+        t.append({"kind": "price", "text": f"Basket {move} over {label}; {k['n_up']} of {k['n_priced']} SKUs rose and {k['n_down']} fell in the latest pull."})
+        vs = [x for x in d["vendors"] if x.get(key) is not None]
+        if vs:
+            hi = max(vs, key=lambda x: x[key]); lo = min(vs, key=lambda x: x[key])
+            if hi[key] != lo[key]:
+                t.append({"kind": "price", "text": f"{hi['name']} is the strongest vendor over {label} ({P(hi[key])}); {lo['name']} the weakest ({P(lo[key])})."})
+        cs = [c for c in d["categories"] if c.get(key) is not None and abs(c[key]) >= 0.0005]
+        if cs:
+            hi = max(cs, key=lambda c: c[key])
+            t.append({"kind": "price", "text": f"{hi['name']} leads categories over {label} at {P(hi[key])}."})
+    steps = [v for v in d["vendors"] if v.get("d1") is not None and v["d1"] > 0.02]
+    if steps:
+        t.append({"kind": "price", "text": "Step-up in the latest pull, consistent with a price-increase notice landing: " + ", ".join(f"{v['name']} {P(v['d1'])}" for v in steps) + "."})
     if k["lead"] is not None:
         txt = f"Median quoted lead time {k['lead']:.0f} weeks"
-        if k["lead_d4"] is not None:
-            txt += f", {k['lead_d4']:+.0f} vs 4 weeks ago"
+        if k.get("lead_d30") is not None:
+            txt += f", {k['lead_d30']:+.0f} vs a month ago"
         longest = max((v for v in d["vendors"] if v["lead"] is not None), key=lambda v: v["lead"], default=None)
         if longest:
             txt += f"; longest at {longest['name']} ({longest['lead']:.0f} wk)"
         t.append({"kind": "supply", "text": txt + "."})
-    if k["instock_d4"] is not None:
-        t.append({"kind": "supply", "text": f"{k['instock'] * 100:.0f}% of the basket is in stock at distribution ({k['instock_d4'] * 100:+.0f} pts vs 4 weeks ago)."})
-    movers = sorted((p for p in d["products"] if p["wow"] is not None and abs(p["wow"]) > 0.0005), key=lambda p: -abs(p["wow"]))[:3]
+    oos = [v for v in d["vendors"] if v["instock"] is not None]
+    if oos:
+        worst = min(oos, key=lambda v: v["instock"])
+        txt = f"{k['instock'] * 100:.0f}% of the basket is in stock at distribution"
+        if k.get("instock_d30") is not None:
+            txt += f" ({k['instock_d30'] * 100:+.0f} pts vs a month ago)"
+        t.append({"kind": "supply", "text": txt + f"; lowest at {worst['name']} ({worst['instock'] * 100:.0f}%)."})
+    movers = sorted((p for p in d["products"] if p.get("d1") is not None and abs(p["d1"]) > 0.0005), key=lambda p: -abs(p["d1"]))[:3]
     if movers:
-        t.append({"kind": "sku", "text": "Biggest SKU moves this week: " + ", ".join(f"{p['mpn']} ({p['vendor']}) {P(p['wow'])}" for p in movers) + "."})
+        t.append({"kind": "sku", "text": "Biggest SKU moves in the latest pull: " + ", ".join(f"{p['mpn']} ({p['vendor']}) {P(p['d1'])}" for p in movers) + "."})
     return t
 
 
@@ -629,8 +655,8 @@ def write_xlsx(data: dict, obs: list[dict], path: Path = XLSX):
     except ImportError:
         print("pandas not installed; skipping tracker.xlsx")
         return
-    wk = data["weeks"]
-    idx = pd.DataFrame({"week": wk, "Basket": data["index"]["all"],
+    wk = data["dates"]
+    idx = pd.DataFrame({"date": wk, "Basket": data["index"]["all"],
                         **{f"V: {k}": v for k, v in data["index"]["vendors"].items()},
                         **{f"C: {k}": v for k, v in data["index"]["categories"].items()}})
     strip = lambda rows: pd.DataFrame([{k: v for k, v in r.items() if k != "spark"} for r in rows])
@@ -639,7 +665,7 @@ def write_xlsx(data: dict, obs: list[dict], path: Path = XLSX):
         strip(data["vendors"]).to_excel(xw, sheet_name="Vendors", index=False)
         strip(data["categories"]).to_excel(xw, sheet_name="Categories", index=False)
         strip(data["products"]).to_excel(xw, sheet_name="Products", index=False)
-        pd.DataFrame({"week": wk, "instock_share": data["supply"]["instock"], "median_lead_wk": data["supply"]["lead"]}).to_excel(xw, sheet_name="Supply", index=False)
+        pd.DataFrame({"date": wk, "instock_share": data["supply"]["instock"], "median_lead_wk": data["supply"]["lead"]}).to_excel(xw, sheet_name="Supply", index=False)
         pd.DataFrame(obs).to_excel(xw, sheet_name="Raw", index=False)
 
 
@@ -654,11 +680,11 @@ def cmd_build(args):
         data["download"] = "tracker.xlsx"
         write_dashboard(data, d / "index.html")
         write_xlsx(data, obs, d / "tracker.xlsx")
-        print(f"Wrote {d / 'index.html'} and tracker.xlsx ({len(data['weeks'])} weeks, {data['n_parts']} SKUs)")
+        print(f"Wrote {d / 'index.html'} and tracker.xlsx ({len(data['dates'])} days, {data['n_parts']} SKUs)")
     else:
         write_dashboard(data)
         write_xlsx(data, obs)
-        print(f"Wrote {DASHBOARD.name} and {XLSX.name} ({len(data['weeks'])} weeks, {data['n_parts']} SKUs)")
+        print(f"Wrote {DASHBOARD.name} and {XLSX.name} ({len(data['dates'])} days, {data['n_parts']} SKUs)")
 
 
 def cmd_run(args):
@@ -667,15 +693,15 @@ def cmd_run(args):
 
 
 # ----------------------------------------------------------------------------- sample data
-def synthetic_obs(basket: list[dict], weeks: int = 30, seed: int = 7) -> list[dict]:
+def synthetic_obs(basket: list[dict], days: int = 120, seed: int = 7) -> list[dict]:
     """Made-up history for previewing the dashboard. Not real prices."""
     import random
     rnd = random.Random(seed)
-    end = date.fromisoformat(week_of(date.today()))
-    wks = [end - timedelta(weeks=weeks - 1 - i) for i in range(weeks)]
-    # Vendor-level step increases at arbitrary weeks (sample only)
-    steps = {"TI": {6: 0.08, 14: 0.06, 22: 0.05}, "ADI": {3: 0.10, 26: 0.07}, "MCHP": {12: 0.04},
-             "NXP": {9: 0.05, 18: 0.03}, "ON": {}, "ST": {10: 0.03, 19: 0.03, 27: 0.02}, "IFX": {18: 0.04}}
+    end = date.today()
+    wks = [end - timedelta(days=days - 1 - i) for i in range(days)]
+    # Vendor-level step increases on arbitrary days (sample only)
+    steps = {"TI": {20: 0.08, 60: 0.06, 100: 0.05}, "ADI": {10: 0.10, 85: 0.07}, "MCHP": {50: 0.04},
+             "NXP": {35: 0.05, 75: 0.03}, "ON": {}, "ST": {40: 0.03, 80: 0.03, 110: 0.02}, "IFX": {70: 0.04}}
     base_price = {"Power management": 0.9, "Amplifiers & comparators": 0.6, "Data converters": 4.5,
                   "Voltage references": 2.2, "Interface": 1.1, "Isolation": 2.4, "Logic": 0.12,
                   "Discretes & drivers": 0.35, "Sensors": 2.0, "MCU (embedded)": 3.5}
@@ -690,11 +716,11 @@ def synthetic_obs(basket: list[dict], weeks: int = 30, seed: int = 7) -> list[di
             for i, w in enumerate(wks):
                 if i in steps.get(b["vendor"], {}) and rnd.random() < 0.8:
                     p *= 1 + steps[b["vendor"]][i] * rnd.uniform(0.5, 1.8)
-                elif rnd.random() < 0.04:
+                elif rnd.random() < 0.006:
                     p *= rnd.uniform(0.98, 1.03)
-                if b["vendor"] in ("ADI", "TI") and i > 15 and rnd.random() < 0.08:
+                if b["vendor"] in ("ADI", "TI") and i > 60 and rnd.random() < 0.012:
                     ld = min(70, ld + rnd.choice([2, 4, 8]))
-                st = max(0, st * rnd.uniform(0.85, 1.1) - (300 if i > 18 else 0))
+                st = max(0, st * rnd.uniform(0.97, 1.025) - (40 if i > 70 else 0))
                 if rnd.random() < 0.01:
                     continue  # occasional missing pull
                 out.append({"date": w.isoformat(), "week": w.isoformat(), "distributor": d, "mpn": b["mpn"],
@@ -722,7 +748,7 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name, fn in (("pull", cmd_pull), ("run", cmd_run)):
         p = sub.add_parser(name)
-        p.add_argument("--force", action="store_true", help="re-fetch SKUs already captured this week")
+        p.add_argument("--force", action="store_true", help="re-fetch SKUs already captured today")
         p.add_argument("--limit", type=int, default=0, help="only fetch the first N SKUs (testing)")
         p.add_argument("--only", nargs="+", default=["digikey", "mouser"], choices=["digikey", "mouser"])
         p.add_argument("--out", help="with run: folder for the website")
