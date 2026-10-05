@@ -5,6 +5,8 @@ name: Price pull
 on:
   schedule:
     - cron: "17 11 * * *"   # 11:17 UTC daily (7:17 am New York in summer)
+    - cron: "17 15 * * *"   # backups in case GitHub delays or skips a run; they only
+    - cron: "17 20 * * *"   # fetch parts not yet captured that day
   push:                      # rebuild the site when the code, layout or basket changes
     branches: [main]
     paths: [tracker.py, dashboard_template.html, basket.csv]
@@ -61,4 +63,5 @@ jobs:
             exit 0
           fi
           git commit -m "Prices: $(date -u +%Y-%m-%d)"
+          git pull --rebase origin main
           git push
