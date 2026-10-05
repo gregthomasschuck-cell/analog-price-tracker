@@ -218,9 +218,26 @@ class DigiKey:
         return parse_digikey_product(prod) if prod else None
 
 
+# Track the same packaging every day so a part's price never jumps just because a
+# different packaging option became cheapest. Cut tape first, full reel last.
+PACKAGE_ORDER = ["cut tape", "tube", "tray", "bulk", "bag", "box", "tape & box", "tape & reel", "digi-reel"]
+
+
+def package_rank(v: dict) -> int:
+    name = str(((v.get("PackageType") or {}).get("Name")) if isinstance(v.get("PackageType"), dict) else v.get("PackageType") or "").lower()
+    pn = str(v.get("DigiKeyProductNumber", "")).upper()
+    if not name:  # fall back to DigiKey's part-number suffixes: -1-ND cut tape, -2-ND reel, -6-ND Digi-Reel
+        name = "cut tape" if pn.endswith("-1-ND") or "CT-ND" in pn else "tape & reel" if pn.endswith("-2-ND") or "TR-ND" in pn else "digi-reel" if pn.endswith("-6-ND") or "DKR-ND" in pn else ""
+    for i, key in enumerate(PACKAGE_ORDER):
+        if key in name:
+            return i
+    return len(PACKAGE_ORDER) - 2   # unknown packaging: just ahead of reels
+
+
 def parse_digikey_product(p: dict) -> dict:
     p1, p1k, dk_pn = [], [], ""
     var_stock = 0
+    priced = []
     for v in p.get("ProductVariations") or []:
         breaks = [(float(b.get("BreakQuantity", 0)), float(b.get("UnitPrice", 0) or 0))
                   for b in v.get("StandardPricing") or []]
@@ -228,9 +245,10 @@ def parse_digikey_product(p: dict) -> dict:
         a, b = price_at(breaks, 1), price_at_or_min(breaks, PRICE_QTY)
         if a: p1.append(a)
         if b:
-            p1k.append(b)
-            if not dk_pn or b <= min(p1k):
-                dk_pn = v.get("DigiKeyProductNumber", "")
+            priced.append((package_rank(v), str(v.get("DigiKeyProductNumber", "")), b))
+    if priced:
+        _, dk_pn, best = min(priced)
+        p1k = [best]
     if not p1 and p.get("UnitPrice"):
         p1.append(float(p["UnitPrice"]))
     status = (p.get("ProductStatus") or {}).get("Status", "") if isinstance(p.get("ProductStatus"), dict) else str(p.get("ProductStatus", ""))
@@ -441,8 +459,10 @@ def compute(obs: list[dict], basket: list[dict], is_sample=False) -> dict:
     series: dict[tuple, list] = {}
     stock: dict[tuple, list] = {}
     lead: dict[tuple, list] = {}
+    sku: dict[tuple, list] = {}
     for (w, d, m), r in latest.items():
         key = (d, m)
+        sku.setdefault(key, [None] * T)[wi[w]] = r.get("dist_pn") or ""
         series.setdefault(key, [None] * T)[wi[w]] = f(r["price_1k"])
         stock.setdefault(key, [None] * T)[wi[w]] = f(r["stock"])
         lead.setdefault(key, [None] * T)[wi[w]] = f(r["lead_weeks"])
@@ -454,7 +474,8 @@ def compute(obs: list[dict], basket: list[dict], is_sample=False) -> dict:
         for t, p in enumerate(s):
             if p is None:
                 continue
-            if last_i is not None and dnum[t] - dnum[last_i] <= MAX_GAP_DAYS:
+            # skip the comparison if the distributor SKU changed (e.g. a different packaging)
+            if last_i is not None and dnum[t] - dnum[last_i] <= MAX_GAP_DAYS and sku[key][t] == sku[key][last_i]:
                 x = p / s[last_i]
                 out[t] = x if REL_MIN <= x <= REL_MAX else None
             last_i = t
