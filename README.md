@@ -61,8 +61,8 @@ default quota. DigiKey raises the quota on request through the developer portal.
   same method on their subset.
 * **Data-error guard:** relatives below 0.5x or above 2.0x are excluded (usually a listing or
   packaging change, not a real price move).
-* **Supply:** in-stock share = parts with distributor stock > 0. Lead time = median
-  manufacturer lead time quoted by the distributor.
+* **Supply:** in-stock share = parts with distributor stock > 0. Lead time = average
+manufacturer lead time quoted by the distributor.
 
 **Caveats.** Distributor list prices lag contract and direct pricing, and TI and ADI sell
 increasingly direct, so read this as a directional channel signal and cross-check against

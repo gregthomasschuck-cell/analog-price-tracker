@@ -538,8 +538,9 @@ def compute(obs: list[dict], basket: list[dict], is_sample=False) -> dict:
         vals = [stock[k][t] for k in keys if stock[k][t] is not None]
         return (sum(1 for v in vals if v > 0) / len(vals)) if vals else None
 
-    def lead_med(keys, t):
-        return med([lead[k][t] for k in keys])
+    def lead_avg(keys, t):
+        vals = [lead[k][t] for k in keys if lead[k][t] is not None]
+        return sum(vals) / len(vals) if vals else None
 
     def up_down(keys, t):
         rs = [rel[k][t] for k in keys if rel[k][t] is not None]
@@ -550,7 +551,7 @@ def compute(obs: list[dict], basket: list[dict], is_sample=False) -> dict:
         return {"name": name, "parts": len({k[1] for k in keys}), "index": arr[L], "d1": chg(arr, 1),
                 "w1": chg(arr, 7), "m1": chg(arr, 30), "m3": chg(arr, 90), "since": chg(arr, None),
                 "n_up": n_up, "n_down": n_down,
-                "instock": instock_share(keys, L) or 0, "lead": lead_med(keys, L), "spark": spark(arr)}
+                "instock": instock_share(keys, L) or 0, "lead": lead_avg(keys, L), "spark": spark(arr)}
 
     vendors = [group_row(v, keys_where(lambda b, v=v: b["vendor"] == v), idx_v[v]) for v in vendor_order]
     categories = [group_row(c, keys_where(lambda b, c=c: b["category"] == c), idx_c[c]) for c in category_order]
@@ -573,7 +574,7 @@ def compute(obs: list[dict], basket: list[dict], is_sample=False) -> dict:
             "mpn": m, "vendor": b["vendor"], "category": b["category"],
             "dk": lastp("digikey"), "mo": lastp("mouser"),
             "d1": chg(arr, 1), "w1": chg(arr, 7), "m1": chg(arr, 30), "since": chg(arr, None),
-            "stock": int(sum(stk)) if stk else None, "lead": med([lead[k][L] for k in ks]),
+            "stock": int(sum(stk)) if stk else None, "lead": lead_avg(ks, L),
             "spark": spark(arr),
             "_d": (arr[L] / arr[L - 1] - 1) if L > 0 and arr[L - 1] else None,
         })
@@ -588,7 +589,7 @@ def compute(obs: list[dict], basket: list[dict], is_sample=False) -> dict:
     n_up_big = sum(1 for x in part_wow if x > 0.10)
 
     instock_series = [instock_share(keys_all, t) for t in range(T)]
-    lead_series = [lead_med(keys_all, t) for t in range(T)]
+    lead_series = [lead_avg(keys_all, t) for t in range(T)]
     j30 = back(30)
     kpis = {
         "index": idx_all[L], "d1": chg(idx_all, 1), "w1": chg(idx_all, 7), "m1": chg(idx_all, 30), "since": chg(idx_all, None),
@@ -638,9 +639,9 @@ def trends(d: dict) -> list[dict]:
     if steps:
         t.append({"kind": "price", "text": "Step-up in the latest pull, consistent with a price-increase notice landing: " + ", ".join(f"{v['name']} {P(v['d1'])}" for v in steps) + "."})
     if k["lead"] is not None:
-        txt = f"Median quoted lead time {k['lead']:.0f} weeks"
+        txt = f"Average quoted lead time {k['lead']:.1f} weeks"
         if k.get("lead_d30") is not None:
-            txt += f", {k['lead_d30']:+.0f} vs a month ago"
+            txt += f", {k['lead_d30']:+.1f} vs a month ago"
         longest = max((v for v in d["vendors"] if v["lead"] is not None), key=lambda v: v["lead"], default=None)
         if longest:
             txt += f"; longest at {longest['name']} ({longest['lead']:.0f} wk)"
@@ -686,7 +687,7 @@ def write_xlsx(data: dict, obs: list[dict], path: Path = XLSX):
         strip(data["vendors"]).to_excel(xw, sheet_name="Vendors", index=False)
         strip(data["categories"]).to_excel(xw, sheet_name="Categories", index=False)
         strip(data["products"]).to_excel(xw, sheet_name="Products", index=False)
-        pd.DataFrame({"date": wk, "instock_share": data["supply"]["instock"], "median_lead_wk": data["supply"]["lead"]}).to_excel(xw, sheet_name="Supply", index=False)
+        pd.DataFrame({"date": wk, "instock_share": data["supply"]["instock"], "avg_lead_wk": data["supply"]["lead"]}).to_excel(xw, sheet_name="Supply", index=False)
         pd.DataFrame(obs).to_excel(xw, sheet_name="Raw", index=False)
 
 

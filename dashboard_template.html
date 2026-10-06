@@ -177,7 +177,7 @@ td.dim { color: var(--muted); }
       <div class="chart" id="chart-stock"></div>
     </section>
     <section class="panel" aria-labelledby="h-lead">
-      <div class="panel-head"><div><h2 id="h-lead">Quoted lead time</h2><p>Median factory lead time across the basket, in weeks</p></div></div>
+      <div class="panel-head"><div><h2 id="h-lead">Quoted lead time</h2><p>Average factory lead time across the basket, in weeks</p></div></div>
       <div class="chart" id="chart-lead"></div>
     </section>
   </div>
@@ -235,7 +235,7 @@ const DATA = /*__DATA__*/null;
     ["Basket index", k.index.toFixed(1), `${chg(k.since)} since ${fmtDate(D.dates[0])}`],
     ["1-month change", `<span class="${cls(k.m1)}">${pct(k.m1)}</span>`, `${chg(k.w1)} 1W · ${chg(k.d1, 2)} 1D`],
     ["Parts up, latest pull", `${k.n_up}<span class="s"> / ${k.n_priced}</span>`, `${k.n_down} down · ${k.n_up_big} up &gt;10%`],
-    ["Median lead time", `${k.lead == null ? "–" : k.lead.toFixed(0) + " wk"}`, k.lead_d30 == null ? "–" : `${k.lead_d30 >= 0 ? "+" : ""}${k.lead_d30.toFixed(0)} wk vs a month ago`],
+    ["Avg lead time", `${k.lead == null ? "–" : k.lead.toFixed(1) + " wk"}`, k.lead_d30 == null ? "–" : `${k.lead_d30 >= 0 ? "+" : ""}${k.lead_d30.toFixed(1)} wk vs a month ago`],
     ["In stock", `${(k.instock * 100).toFixed(0)}%`, k.instock_d30 == null ? "–" : `${k.instock_d30 >= 0 ? "+" : ""}${(k.instock_d30 * 100).toFixed(0)} pts vs a month ago`],
   ].map(([l, v, s]) => `<div class="kpi"><div class="eyebrow">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");
 
@@ -338,7 +338,7 @@ const DATA = /*__DATA__*/null;
   // ---------- group tables ----------
   function groupTable(el, rows, prefix, label) {
     el.innerHTML = `<thead><tr><th>${label}</th><th class="n">SKUs</th><th class="n">Index</th><th class="n">1D</th><th class="n">1W</th><th class="n">1M</th><th class="n">3M</th><th class="n">Up / down 1D</th><th class="n">In stock</th><th class="n">Lead (wk)</th><th>3M trend</th></tr></thead><tbody>` +
-      rows.map((r) => `<tr><td><span class="sw" style="--c:var(${colorOf[prefix + r.name]})"></span>${esc(r.name)}</td><td class="n">${r.parts}</td><td class="n">${r.index.toFixed(1)}</td><td class="n">${chg(r.d1, 2)}</td><td class="n">${chg(r.w1)}</td><td class="n">${chg(r.m1)}</td><td class="n">${chg(r.m3)}</td><td class="n">${r.n_up} / ${r.n_down}</td><td class="n">${(r.instock * 100).toFixed(0)}%</td><td class="n">${r.lead == null ? "–" : r.lead.toFixed(0)}</td><td>${spark(r.spark, colorOf[prefix + r.name])}</td></tr>`).join("") + "</tbody>";
+      rows.map((r) => `<tr><td><span class="sw" style="--c:var(${colorOf[prefix + r.name]})"></span>${esc(r.name)}</td><td class="n">${r.parts}</td><td class="n">${r.index.toFixed(1)}</td><td class="n">${chg(r.d1, 2)}</td><td class="n">${chg(r.w1)}</td><td class="n">${chg(r.m1)}</td><td class="n">${chg(r.m3)}</td><td class="n">${r.n_up} / ${r.n_down}</td><td class="n">${(r.instock * 100).toFixed(0)}%</td><td class="n">${r.lead == null ? "–" : r.lead.toFixed(1)}</td><td>${spark(r.spark, colorOf[prefix + r.name])}</td></tr>`).join("") + "</tbody>";
   }
   groupTable($("#t-vendors"), D.vendors, "v:", "Vendor");
   groupTable($("#t-cats"), D.categories, "c:", "Category");
@@ -346,7 +346,7 @@ const DATA = /*__DATA__*/null;
   // ---------- supply charts ----------
   function drawSupply() {
     lineChart($("#chart-stock"), D.dates, [{ name: "In stock", color: "--s1", values: D.supply.instock.map((v) => v == null ? null : v * 100) }], { h: 200, label: "In-stock share", yfmt: (v, tip, d = 0) => v.toFixed(tip ? 0 : d) + "%", empty: `${D.supply.instock[0] == null ? "–" : Math.round(D.supply.instock[0] * 100) + "%"} in stock today. The trend line starts with tomorrow's pull.` });
-    lineChart($("#chart-lead"), D.dates, [{ name: "Median lead", color: "--s2", values: D.supply.lead }], { h: 200, label: "Median lead time", yfmt: (v, tip, d = 0) => v.toFixed(tip ? 0 : d), empty: `${D.supply.lead[0] == null ? "–" : D.supply.lead[0].toFixed(0) + " weeks"} median lead time today. The trend line starts with tomorrow's pull.` });
+    lineChart($("#chart-lead"), D.dates, [{ name: "Avg lead", color: "--s2", values: D.supply.lead }], { h: 200, label: "Average lead time", yfmt: (v, tip, d = 0) => v.toFixed(tip ? 1 : d), empty: `${D.supply.lead[0] == null ? "–" : D.supply.lead[0].toFixed(1) + " weeks"} average lead time today. The trend line starts with tomorrow's pull.` });
   }
 
   // ---------- parts table ----------
