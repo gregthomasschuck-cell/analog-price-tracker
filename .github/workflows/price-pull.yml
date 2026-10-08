@@ -28,6 +28,9 @@ jobs:
   pull:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    env:
+      TZ: America/New_York   # stamp each day's prices by the New York date, so a late
+                             # evening backup run can't roll into the next UTC day
     steps:
       - uses: actions/checkout@v4
 
@@ -62,6 +65,6 @@ jobs:
             echo "No new prices or site changes; nothing to commit."
             exit 0
           fi
-          git commit -m "Prices: $(date -u +%Y-%m-%d)"
+          git commit -m "Prices: $(date +%Y-%m-%d)"
           git pull --rebase origin main
           git push
