@@ -9,6 +9,7 @@ Weekly fixed-SKU price tracker for analog semis using the DigiKey and Mouser API
   python tracker.py run       # pull, then build (what the daily schedule calls)
   python tracker.py sample    # write a dashboard from synthetic data to preview the layout
   python tracker.py build --out docs   # website mode, used by the GitHub Action
+  python tracker.py publish   # upload the paid dashboard + free teaser to Supabase (web/ app)
 
 Pulls are resumable: a SKU already captured for a distributor today is skipped,
 so re-running `pull` after a quota stop or an error only fetches what's missing. Credentials go in config.json (see config.example.json) or environment
@@ -765,6 +766,59 @@ def cmd_sample(args):
     print(f"Wrote {path}")
 
 
+# ----------------------------------------------------------------------------- paid website (Supabase)
+TEASER_SAMPLE_SKUS = 5    # how many SKUs the free landing page shows
+
+
+def teaser(data: dict) -> dict:
+    """The free slice shown on the public landing page: the basket index, headline KPIs,
+    the basket-level trends and a handful of sample SKUs. Vendor, category and full
+    SKU detail stay behind the paywall."""
+    sample = sorted((p for p in data["products"] if p.get("dk") is not None or p.get("mo") is not None),
+                    key=lambda p: p["mpn"])[:TEASER_SAMPLE_SKUS]
+    return {
+        "generated": data["generated"], "is_sample": data["is_sample"], "latest_date": data["latest_date"],
+        "dates": data["dates"], "index": data["index"]["all"], "kpis": data["kpis"],
+        "n_parts": data["n_parts"], "n_vendors": len(data["vendors"]), "n_categories": len(data["categories"]),
+        "distributors": data["distributors"],
+        "trends": [t["text"] for t in data["trends"]][:1] + [t["text"] for t in data["trends"] if t["kind"] == "supply"][:1],
+        "sample": [{k: p[k] for k in ("mpn", "vendor", "category", "dk", "mo", "w1", "m1")} for p in sample],
+    }
+
+
+def supabase_upload(bucket: str, name: str, body: bytes, content_type: str):
+    import requests
+    url = os.environ["SUPABASE_URL"].rstrip("/")
+    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+    r = requests.post(f"{url}/storage/v1/object/{bucket}/{name}", data=body, timeout=120, headers={
+        "Authorization": f"Bearer {key}", "apikey": key, "Content-Type": content_type,
+        "x-upsert": "true", "Cache-Control": "max-age=300"})
+    if r.status_code >= 300:
+        raise SystemExit(f"Supabase upload of {bucket}/{name} failed: HTTP {r.status_code} {r.text[:300]}")
+    print(f"Uploaded {bucket}/{name} ({len(body):,} bytes)")
+
+
+def cmd_publish(args):
+    """Build the subscriber dashboard and upload it, the Excel file, the raw CSV and the
+    free teaser to Supabase Storage. The web app in web/ serves them."""
+    if not (os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_ROLE_KEY")):
+        print("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set; skipping publish.")
+        return
+    basket, obs = load_basket(), read_obs()
+    data = compute(obs, basket)
+    data["download"] = "/dashboard/tracker.xlsx"   # served by the web app, subscribers only
+    out = HERE / "build"
+    out.mkdir(exist_ok=True)
+    write_dashboard(data, out / "dashboard.html")
+    write_xlsx(data, obs, out / "tracker.xlsx")
+    supabase_upload("paid", "dashboard.html", (out / "dashboard.html").read_bytes(), "text/html; charset=utf-8")
+    if (out / "tracker.xlsx").exists():
+        supabase_upload("paid", "tracker.xlsx", (out / "tracker.xlsx").read_bytes(),
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    supabase_upload("paid", "observations.csv", OBS_FILE.read_bytes(), "text/csv; charset=utf-8")
+    supabase_upload("public", "teaser.json", json.dumps(teaser(data), separators=(",", ":")).encode(), "application/json")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -777,6 +831,7 @@ def main():
         p.set_defaults(fn=fn)
     p = sub.add_parser("build"); p.add_argument("--out", help="folder for the website (writes index.html)"); p.set_defaults(fn=cmd_build)
     p = sub.add_parser("sample"); p.add_argument("--out"); p.add_argument("--fragment", action="store_true"); p.set_defaults(fn=cmd_sample)
+    p = sub.add_parser("publish", help="upload the paid dashboard + free teaser to Supabase"); p.set_defaults(fn=cmd_publish)
     args = ap.parse_args()
     args.fn(args)
 

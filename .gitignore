@@ -5,3 +5,4 @@ dashboard.html
 dashboard_sample.html
 tracker.xlsx
 .DS_Store
+build/

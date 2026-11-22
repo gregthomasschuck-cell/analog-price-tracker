@@ -39,6 +39,12 @@ rebuilds the site automatically.
 visible to anyone with the link (the page asks search engines not to index it). A private
 site needs GitHub Enterprise Cloud with private Pages.
 
+## Paid website
+
+`web/` holds a subscriber site with a free preview and a Stripe paywall. The daily
+Action publishes the dashboard to it once the `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` secrets exist. Setup steps are in `web/README.md`.
+
 ## Editing the basket
 
 `basket.csv` has four columns: `mpn, manufacturer, vendor, category`. Add or remove rows
@@ -90,3 +96,4 @@ python tracker.py sample                # preview the layout with synthetic data
 | `data/not_found.csv` | Part numbers a distributor didn't recognise |
 | `docs/` | The website GitHub Pages serves (rebuilt by the Action) |
 | `.github/workflows/price-pull.yml` | The daily schedule |
+| `web/` | Paid subscriber website (Next.js + Supabase + Stripe). Setup: `web/README.md` |

@@ -56,6 +56,13 @@ jobs:
             echo "No prices yet (check the API secrets); leaving the sample site in place."
           fi
 
+      - name: Publish to the paid site (Supabase)
+        if: ${{ hashFiles('data/observations.csv') != '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python tracker.py publish   # skips itself until the two secrets are added
+
       - name: Save new prices and site
         run: |
           git config user.name "github-actions[bot]"
